@@ -6,11 +6,13 @@ mod fpga_io;
 use std::process;
 
 fn main() {
-    let mut fpga = fpga_io::FPGA::new();
-    if let Err(err) = fpga.io_init() {
-        eprintln!("Failed to initialize FPGA IO: {:?}", err);
-        process::exit(1);
-    }
+    let _fpga = match fpga_io::FPGA::init() {
+        Ok(fpga) => fpga,
+        Err(err) => {
+            eprintln!("Failed to initialize FPGA: {:?}", err);
+            process::exit(1);
+        }
+    };
     
     println!("Hello, world!");
 }
