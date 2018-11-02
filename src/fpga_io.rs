@@ -2,9 +2,9 @@ use libc;
 use memmap::*;
 use std::fs::OpenOptions;
 use std::io;
-use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::result;
+use byteorder::{ByteOrder, LittleEndian};
 
 #[derive(Debug)]
 pub enum FPGAError {
@@ -25,26 +25,6 @@ const SOCFPGA_MGR_ADDRESS: u32 = 0xFF706000;
 const SOCFPGA_MGR_GPO_REGISTER_ADDRESS : u32 = SOCFPGA_MGR_ADDRESS + 0x10;
 const SOCFPGA_MGR_GPI_REGISTER_ADDRESS : u32 = SOCFPGA_MGR_ADDRESS + 0x14;
 
-/// Converts u32 to u8 little endian byte array
-#[inline]
-fn u32tou8ale(v: u32) -> [u8; 4] {
-    [
-        v as u8,
-        (v >> 8) as u8,
-        (v >> 16) as u8,
-        (v >> 24) as u8,
-    ]
-}
-
-/// Converts an u8 little endian byte array to u32
-#[inline]
-fn u8aletou32(a: [u8; 4]) -> u32 {
-    a[0] as u32 
-        + (a[1] as u32).rotate_left(8) 
-        + (a[2] as u32).rotate_left(16)
-        + (a[3] as u32).rotate_left(24)
-}
-
 impl FPGA {
     pub fn init() -> FPGAResult<FPGA> {
         let mem_map = match FPGA::mem_map_init() {
@@ -56,20 +36,16 @@ impl FPGA {
             mem_map: mem_map
         };
 
-        return match fpga.fpga_gpo_write(0) {
-            Ok(_) => Ok(fpga),
-            Err(e) => Err(FPGAError::Io(e))
-        };
+        fpga.fpga_gpo_write(0);
+
+        Ok(fpga)
     }
 
-    /// Checks whetever the FPGA core is ready.
+    /// Checks if the FPGA core is ready.
     /// This is done by checking the first bit of the GPI register which should be 1.
     /// First bit is set to 1 once the core is started running. (TODO: is this correct?)
-    pub fn is_fpga_ready(&mut self) -> FPGAResult<bool> {
-        return match self.fpga_gpi_read() {
-            Ok(value) => Ok(value as i32 >= 0),
-            Err(e) => Err(FPGAError::Io(e))
-        };
+    pub fn is_fpga_ready(&mut self) -> bool {
+        self.fpga_gpi_read() as i32 >= 0
     }
 
     /// Initializes the memory mapped region of the FPGA visible from the HPS
@@ -97,37 +73,32 @@ impl FPGA {
     }
 
     /// Writes a new value to the FPGA manager's GPO register
-    fn fpga_gpo_write(&mut self, value: u32) -> std::io::Result<()> {
-        self.writeu32le(value, SOCFPGA_MGR_GPO_REGISTER_ADDRESS)?;
-        Ok(())
+    fn fpga_gpo_write(&mut self, value: u32) {
+        self.writeu32le(value, SOCFPGA_MGR_GPO_REGISTER_ADDRESS)
     }
 
     // Reads the FPGA manager's GPI register
-    fn fpga_gpi_read(&mut self) -> std::io::Result<u32> {
+    fn fpga_gpi_read(&mut self) -> u32 {
         self.readu32le(SOCFPGA_MGR_GPI_REGISTER_ADDRESS)
     }
 
     // Creates a mutable memory slice from the FPGA memory region for access
     #[inline]
     fn get_memory_slice(&mut self, offset: u32, size: u32) -> &mut [u8] {
-        let reg24 = (offset & 0xFFFFFF) >> 2;
-        &mut self.mem_map[reg24 as usize..(reg24 + size) as usize]
+        // Strip the lower 24 bit of the offset to protect from going outside the region
+        let offset24 = (offset & 0xFFFFFF) >> 2;
+        &mut self.mem_map[offset24 as usize..(offset24 + size) as usize]
     }
 
     /// Writes a u32 to an FPGA memory position as little endian value
     #[inline]
-    fn writeu32le(&mut self, value: u32, offset: u32) -> std::io::Result<()> {
-        let mut slice = self.get_memory_slice(offset, 3);
-        slice.write_all(&u32tou8ale(value)[..])?;
-        Ok(())
+    fn writeu32le(&mut self, value: u32, offset: u32) {
+        LittleEndian::write_u32(self.get_memory_slice(offset, 3), value);
     }
 
     // Reads an FPGA memory position as little endian value into an u32 integer
     #[inline]
-    fn readu32le(&mut self, offset: u32) -> std::io::Result<u32> {
-        let slice = self.get_memory_slice(offset, 3);
-        let mut u8lea : [u8; 4] = Default::default();
-        u8lea.copy_from_slice(&slice[..]);
-        Ok(u8aletou32(u8lea))
+    fn readu32le(&mut self, offset: u32) -> u32 {
+        LittleEndian::read_u32(&self.get_memory_slice(offset, 3))
     }
 }

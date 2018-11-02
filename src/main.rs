@@ -1,3 +1,4 @@
+extern crate byteorder;
 extern crate libc;
 extern crate memmap;
 
@@ -24,16 +25,8 @@ fn main() {
 
     println!("Core path: '{0}'", core_path);
 
-    match fpga.is_fpga_ready() {
-        Ok(ready) => {
-            if !ready {
-                eprintln!("FPGA is unitialized or incompatible core loaded.");
-                process::exit(0);
-            }
-        },
-        Err(err) => {
-            eprintln!("Failed to read FPGA ready state: {:?}", err);
-            process::exit(0);
-        }
+    if !fpga.is_fpga_ready() {
+        eprintln!("FPGA is unitialized or incompatible core loaded.");
+        process::exit(0);
     }
 }
