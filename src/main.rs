@@ -4,6 +4,8 @@ extern crate memmap;
 
 mod fpga_io;
 mod file_io;
+mod core_registry;
+mod cores;
 
 use std::{process, env, thread, time};
 
@@ -37,6 +39,8 @@ fn main() {
     let core_path = args.get(0).or(Some(default_core_path)).unwrap();
 
     println!("Core path: '{0}'", core_path);
+
+    let _cores = core_registry::get_default();
 
     // TODO: user_io related initializations
 
