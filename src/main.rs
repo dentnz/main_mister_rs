@@ -1,4 +1,6 @@
 extern crate byteorder;
+#[macro_use]
+extern crate clap;
 extern crate libc;
 #[macro_use]
 extern crate log;
@@ -11,9 +13,11 @@ mod file_io;
 #[macro_use]
 mod utils;
 
-const DEFAULT_CORE_PATH : &str = "Test";
+use clap::{Arg, App};
 
-use std::{env};
+const ARG_CORE_PATH : &str = "CORE_PATH";
+
+const DEFAULT_CORE_PATH : &str = "";
 
 fn main() {
     let mut fpga = unwrap_or_exit!(fpga_io::FPGA::init(), "Failed to initialize FPGA");
@@ -25,15 +29,20 @@ fn main() {
     }
 
     let _storage = unwrap_or_exit!(file_io::Storage::init(), "Cannot initialize storage");
+    
+    let arg_matches = App::new("main_mister_rs")
+        .version(crate_version!())
+        .arg(Arg::with_name(ARG_CORE_PATH)
+            .help("The path where cores placed.")
+            .required(false)
+            .index(1))
+        .get_matches();
 
-    let args: Vec<String> = env::args().collect();
+    let core_path = arg_matches.value_of(ARG_CORE_PATH).unwrap_or(DEFAULT_CORE_PATH);
 
-    let default_core_path = DEFAULT_CORE_PATH.to_string();
-    let _core_path = args.get(0).unwrap_or(&default_core_path);
+    info!("Core path: {0}", core_path);
 
-    info!("Core path: {0}", _core_path);
-
-    let _cores = core_registry::get_default();
+    let _cores = core_registry::get_default(core_path);
 
     // TODO: user_io related initializations
 
