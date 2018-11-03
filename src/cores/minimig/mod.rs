@@ -4,7 +4,7 @@ use cores::api::{
     KEY_CAPS_TOGGLE as CAPS_TOGGLE
 };
 
-const AMIGA_KEYMAP : &'static [u32] = &[
+const MINIMIG_KEYMAP : &'static [u32] = &[
     NONE, //0   KEY_RESERVED	
 	0x45, //1   KEY_ESC			
 	0x01, //2   KEY_1			
@@ -273,7 +273,7 @@ impl MinimigCore {
 
 impl Core for MinimigCore {
     fn map_key(&self, key: u16) -> u32 {
-        match AMIGA_KEYMAP.get(key as usize) {
+        match MINIMIG_KEYMAP.get(key as usize) {
             Some(code) => *code,
             None => NONE
         }

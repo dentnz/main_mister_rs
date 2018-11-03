@@ -1,9 +1,8 @@
 use libc;
 use memmap::{MmapMut, MmapOptions};
 use std::fs::OpenOptions;
-use std::io;
+use std::{io, result, thread, time};
 use std::os::unix::fs::OpenOptionsExt;
-use std::result;
 use byteorder::{ByteOrder, LittleEndian};
 
 #[derive(Debug)]
@@ -32,10 +31,7 @@ const SOCFPGA_RSTMGR_TSTSCRATCH_ADDRESS : u64 = SOCFPGA_RSTMGR_ADDRESS + 0xC0;
 
 impl FPGA {
     pub fn init() -> FPGAResult<FPGA> {
-        let memmap = match FPGA::memmap_init() {
-            Ok(mem_map) => mem_map,
-            Err(e) => return Err(e)
-        };
+        let memmap = FPGA::memmap_init()?;
 
         let mut fpga = FPGA {
             memmap: memmap
@@ -52,10 +48,19 @@ impl FPGA {
         self.gpi_read() as i32 >= 0
     }
 
-    /// Resets the FPGA core
-    pub fn core_reset(&mut self) {
-        let gpo = self.gpo_read() & !0xC0000000;
-        self.gpo_write(gpo | 0x40000000);
+    /// Ensures that the FPGA is in ready state. If not, resets the core and reboots.
+    pub fn ensure_ready(&mut self) {
+        if !self.is_ready() {
+            println!("Waiting for FPGA to be ready...");
+
+            self.core_reset();
+
+            while !self.is_ready() {
+                thread::sleep(time::Duration::from_secs(1));
+            }
+
+            self.reboot(false);
+        }
     }
 
     /// Reboots the whole device, including HPS
@@ -68,28 +73,28 @@ impl FPGA {
         loop {} // Wait for the device to reboot in an endless-loop
     }
 
+    /// Resets the FPGA core
+    fn core_reset(&mut self) {
+        let gpo = self.gpo_read() & !0xC0000000;
+        self.gpo_write(gpo | 0x40000000);
+    }
+
     /// Initializes the memory mapped region of the FPGA visible from the HPS
     fn memmap_init() -> FPGAResult<MmapMut> {
-        let mem_dev_file = match OpenOptions::new()
+        let mem_dev_file = OpenOptions::new()
             .read(true)
             .write(true)
             .custom_flags(libc::O_SYNC)
             .open("/dev/mem")
-        {
-            Ok(file) => file,
-            Err(e) => return Err(FPGAError::Io(e))
-        };
+            .map_err(|err| { FPGAError::Io(err) })?;
 
         unsafe {
-            let mmap_mut = match MmapOptions::new()
+            MmapOptions::new()
                 .offset(FPGA_REG_BASE)
                 .len(FPGA_REG_SIZE)
-                .map_mut(&mem_dev_file) {
-                    Ok(mmap_mut) => mmap_mut,
-                    Err(e) => return Err(FPGAError::Io(e))
-                };
-            return Ok(mmap_mut);
-        };
+                .map_mut(&mem_dev_file)
+                .map_err(|err| { FPGAError::Io(err) })
+        }
     }
 
     /// Writes a new value to the FPGA manager's GPO register
