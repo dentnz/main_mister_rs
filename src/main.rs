@@ -1,12 +1,13 @@
 extern crate byteorder;
 extern crate libc;
+#[macro_use]
+extern crate log;
 extern crate memmap;
 
-mod fpga_io;
-mod file_io;
 mod core_registry;
 mod cores;
-
+mod fpga_io;
+mod file_io;
 #[macro_use]
 mod utils;
 
@@ -17,7 +18,7 @@ use std::{env};
 fn main() {
     let mut fpga = unwrap_or_exit!(fpga_io::FPGA::init(), "Failed to initialize FPGA");
     
-    println!("main_mister_rs starting.");
+    info!("main_mister_rs starting.");
 
     if !fpga.is_ready() {
         exit!("FPGA is uninitialized or incompatible core loaded.");
@@ -30,7 +31,7 @@ fn main() {
     let default_core_path = DEFAULT_CORE_PATH.to_string();
     let _core_path = args.get(0).unwrap_or(&default_core_path);
 
-    println!("Core path: '{0}'", _core_path);
+    info!("Core path: {0}", _core_path);
 
     let _cores = core_registry::get_default();
 

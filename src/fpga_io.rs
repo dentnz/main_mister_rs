@@ -51,7 +51,7 @@ impl FPGA {
     /// Ensures that the FPGA is in ready state. If not, resets the core and reboots.
     pub fn ensure_ready(&mut self) {
         if !self.is_ready() {
-            println!("Waiting for FPGA to be ready...");
+            info!("Waiting for FPGA to be ready...");
 
             self.core_reset();
 

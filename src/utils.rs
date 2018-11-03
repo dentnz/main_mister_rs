@@ -1,7 +1,7 @@
 macro_rules! unwrap_or_exit {
     ( $e:expr, $m:expr ) => {
         $e.unwrap_or_else(|err| {
-            eprintln!("{}: {:?}", $m, err);
+            error!("{}: {:?}", $m, err);
             std::process::exit(0);
         });
     }
@@ -9,7 +9,7 @@ macro_rules! unwrap_or_exit {
 
 macro_rules! exit {
     ( $m:expr ) => { 
-        eprintln!("{}", $m); 
+        error!("{}", $m); 
         std::process::exit(0); 
     } 
 }
