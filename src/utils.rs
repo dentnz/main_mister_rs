@@ -6,10 +6,3 @@ macro_rules! unwrap_or_exit {
         });
     }
 }
-
-macro_rules! exit {
-    ( $m:expr ) => { 
-        error!("{}", $m); 
-        std::process::exit(0); 
-    } 
-}

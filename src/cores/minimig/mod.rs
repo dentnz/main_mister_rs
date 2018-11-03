@@ -1,5 +1,5 @@
 use cores::api::{
-    Core, 
+    Core,
     KEY_CODE_NONE as NONE,
     KEY_CAPS_TOGGLE as CAPS_TOGGLE
 };
@@ -263,6 +263,8 @@ const MINIMIG_KEYMAP : &'static [u32] = &[
 	NONE  //255 ???				
 ];
 
+const MINIMIG_CORE_ID : u8 = 0xa5;
+
 pub struct MinimigCore();
 
 impl MinimigCore {
@@ -272,6 +274,10 @@ impl MinimigCore {
 }
 
 impl Core for MinimigCore {
+	fn core_id(&self) -> u8 {
+		MINIMIG_CORE_ID
+	}
+
     fn map_key(&self, key: u16) -> u32 {
         match MINIMIG_KEYMAP.get(key as usize) {
             Some(code) => *code,

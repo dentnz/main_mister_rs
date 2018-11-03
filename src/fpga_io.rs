@@ -7,8 +7,10 @@ use byteorder::{ByteOrder, LittleEndian};
 
 #[derive(Debug)]
 pub enum FPGAError {
-    /// Gerneric IO error
-    Io(io::Error)
+    /// IO error
+    Io(io::Error),
+    /// Generic Initialization failure
+    Init(String)
 }
 
 pub type FPGAResult<T> = result::Result<T, FPGAError>;
@@ -29,6 +31,8 @@ const SOCFPGA_RSTMGR_ADDRESS : u64 = 0xffd05000;
 const SOCFPGA_RSTMGR_CTRL_ADDRESS : u64 = SOCFPGA_RSTMGR_ADDRESS + 0x04;
 const SOCFPGA_RSTMGR_TSTSCRATCH_ADDRESS : u64 = SOCFPGA_RSTMGR_ADDRESS + 0xC0;
 
+const CORE_CHECK_MAGIC_NUMBER : u32 = 0x5CA623;
+
 impl FPGA {
     pub fn init() -> FPGAResult<FPGA> {
         let memmap = FPGA::memmap_init()?;
@@ -37,21 +41,19 @@ impl FPGA {
             memmap: memmap
         };
 
+        // First initialization of FPGA
         fpga.gpo_write(0);
+        if !fpga.is_ready() {
+            return Err(FPGAError::Init("FPGA is uninitialized or incompatible core loaded.".to_owned()));
+        }
 
         Ok(fpga)
-    }
-
-    /// Checks if the FPGA core is ready.
-    /// This is done by checking the first bit of the GPI register which should be 1.
-    pub fn is_ready(&mut self) -> bool {
-        self.gpi_read() as i32 >= 0
     }
 
     /// Ensures that the FPGA is in ready state. If not, resets the core and reboots.
     pub fn ensure_ready(&mut self) {
         if !self.is_ready() {
-            info!("Waiting for FPGA to be ready...");
+            info!("Waiting for FPGA to be ready and rebooting...");
 
             self.core_reset();
 
@@ -63,6 +65,21 @@ impl FPGA {
         }
     }
 
+    /// Retrieves the current core's ID from the FPGA
+    pub fn get_current_core_id(&mut self) -> Option<u8> {
+        let mut gpo = self.gpo_read() & 0x7FFFFFFF;
+        self.gpo_write(gpo);
+        let coretype = self.gpi_read();
+        gpo |= 0x80000000;
+        self.gpo_write(gpo);
+
+        if (coretype >> 8) != CORE_CHECK_MAGIC_NUMBER { 
+            None 
+        } else { 
+            Some((coretype & 0xFF) as u8) 
+        }
+    }
+
     /// Reboots the whole device, including HPS
     pub fn reboot(&mut self, cold: bool) {
         // TODO: sync file changes to disk before rebooting.
@@ -71,6 +88,12 @@ impl FPGA {
         self.writeu32le(if cold { 0 } else { 0x1 }, SOCFPGA_RSTMGR_TSTSCRATCH_ADDRESS);
         self.writeu32le(2, SOCFPGA_RSTMGR_CTRL_ADDRESS);
         loop {} // Wait for the device to reboot in an endless-loop
+    }
+
+    /// Checks if the FPGA core is ready.
+    /// This is done by checking the first bit of the GPI register which should be 1.
+    fn is_ready(&mut self) -> bool {
+        self.gpi_read() as i32 >= 0
     }
 
     /// Resets the FPGA core
